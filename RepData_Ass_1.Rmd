@@ -1,0 +1,112 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+html_document:
+keep_md: true
+---
+
+
+## Loading and preprocessing the data
+
+We load some libraries that will be used in the this task. We also preprocess the activity data file, which is in the CSV format, removing NAs and formating columns. 
+```{r ,echo = TRUE}
+Sys.setlocale("LC_TIME", "C")
+suppressWarnings(library("plyr",warn.conflicts = FALSE,quietly = TRUE))
+suppressWarnings(library("lattice",warn.conflicts = FALSE,quietly = TRUE))
+suppressWarnings(library("dplyr",warn.conflicts = FALSE,quietly = TRUE))
+suppressWarnings(library("ggplot2",warn.conflicts = FALSE,quietly = TRUE))
+setwd("C:\\Classes\\Coursera\\repdata-014")
+activity<-read.csv("activity.csv",colClasses=c("integer", "Date", "integer"))
+activity$interval<-60*floor((activity$interval+1)/100) + (activity$interval %% 100)
+str(activity)
+activity_h=na.omit(activity)
+str(activity_h)
+```
+
+## What is mean total number of steps taken per day?
+
+```{r }
+total_steps <- tapply(activity_h$steps, activity_h$date, sum)
+step_mean <- mean(total_steps)
+sum_stepsxday=aggregate(x=list(steps=activity_h$steps),by=list(date=activity_h$date),sum)
+mean_step=mean(sum_stepsxday$steps)
+median_step=median(sum_stepsxday$steps)
+
+```
+
+The average number of steps per day is:
+```{r}
+step_mean
+```
+
+The histogram below shows the distribution of steps per day.
+```{r}
+hist(sum_stepsxday$steps,breaks=12,col = "green", xlab = "Steps", main="Histogram (steps x day)")
+```
+
+The mean and median are, respectively:
+```{r}
+mean_step
+median_step
+```
+
+
+## What is the average daily activity pattern?
+
+```{r}
+avg_steps <- tapply(activity_h$steps, activity_h$interval, mean)
+hours <- as.numeric(names(avg_steps))/60
+plot(hours, avg_steps, type="l", axes=F,
+     xlab="Time (h)", ylab="average steps in 5-min interval",
+     main="Daily activity pattern")
+     axis(1,at=0:24,labels=paste(0:24,":00", sep="")) 
+     axis(2)
+max_num<-which(avg_steps==max(avg_steps))
+max_int<-activity_h$interval[max_num]
+
+```
+
+The 5-minute interval that contains the maximun number of steps is:
+```{r}
+sprintf("%02d:%02d", floor(max_int/60), max_int %% 60)
+```
+
+## Imputing missing values
+Here we calculate the total number of NA values. We also try to fill in the missing values (5 min intervals). 
+The histogram shows the total numbers of steps taken each day. Also the mean and median are calculated.   
+
+```{r}
+sum(is.na(activity))
+activity_t <- transform(activity,steps=ifelse(is.na(steps),avg_steps, steps))
+summary(activity_t)
+steps_tot <- tapply(activity_t$steps, activity_t$date, sum, na.rm=T)
+step_mean <- mean(steps_tot)
+step_mean
+step_median <- median(steps_tot)
+step_median
+hist(steps_tot, breaks=11, 
+     xlab="steps per day", 
+     sub="(with missing values)",
+     main="Histogram of total steps x day")
+abline(v=step_mean, col="blue", lwd=3)
+abline(v=step_median, col="green", lwd=3, lty=2)
+legend(x="topright", legend=c("mean","median"), col=c("blue","green"), bty="n", lwd=3)
+sum(activity$steps, na.rm=TRUE)
+sum(activity_t$steps)
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+We create a factor variable with two levels, weekday and weekend. Then we plot time series data of the 5 min interval and the average number of steps taken comparating these two different approaches. 
+
+```{r patterns}
+week <- factor(weekdays(activity_t$date) %in% c("Saturday","Sunday"),labels=c("weekday","weekend"), ordered=FALSE)
+tot_steps <- aggregate(activity_t$date, by=list(interval=activity_t$interval, weekday=week), mean)
+activity_t$weekdays <- weekdays(as.Date(activity$date))
+activity_t$weekdays <- ifelse(activity_t$weekdays %in% c("Saturday", "Sunday"),"weekend", "weekday")
+average <- ddply(activity_t, .(interval, weekdays), summarise, steps=mean(steps))
+xyplot(steps ~ interval | weekdays, data = average, layout = c(1, 2), type="l", xlab = "Interval", ylab = "# of steps")
+```
+
+
+
